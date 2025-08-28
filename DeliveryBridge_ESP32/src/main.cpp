@@ -27,7 +27,7 @@ const char* ssid = "ESP32";
 const char* password = "12345678";
 
 // Socket.IO server (replace with your computer's IP where delivery_bridge is running)
-const char* socketio_host = "192.168.0.102";
+const char* socketio_host = "192.168.0.103";
 const int socketio_port = 9009;
 
 SocketIOclient socketIO;

@@ -5,7 +5,7 @@
 [![ROS2](https://img.shields.io/badge/ROS2-Humble%2B-blue.svg)](https://docs.ros.org/en/humble/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.0%2B-green.svg)](https://socket.io/)
 
-A Socket.IO client implementation for ESP32 using PlatformIO that enables real-time communication between your ESP32 device and a ROS2 delivery bridge system for robot control via cmd_vel commands.
+A Socket.IO client implementation for ESP32 using PlatformIO that enables real-time communication between your ESP32 device and a modified ROS2 delivery bridge system for robot control via cmd_vel commands. The delivery bridge has been optimized for ESP32 communication by removing web interface components while preserving all Socket.IO and API functionality.
 
 ## Features
 
@@ -16,6 +16,9 @@ A Socket.IO client implementation for ESP32 using PlatformIO that enables real-t
 - Automatic reconnection logic
 - JSON-based message protocol
 - Easy configuration and deployment
+- **Modified delivery bridge** - Web interface removed, optimized for ESP32 access
+- **No authentication required** - Direct API access for ESP32
+- **Real-time robot data** - Battery status, position updates, system status
 
 ## Table of Contents
 
@@ -45,27 +48,27 @@ A Socket.IO client implementation for ESP32 using PlatformIO that enables real-t
 
 ## Quick Start
 
-1. **Clone and setup the delivery bridge (ROS2 backend)**
+1. **Clone this repository (includes modified delivery_bridge)**
    ```bash
-   # Clone the delivery bridge repository (original author's work)
-   git clone https://github.com/cmauricioae8/delivery_bridge.git
-   cd delivery_bridge
-   
-   # Follow the delivery_bridge README instructions for ROS2 setup
-   # This will handle the ROS2 package installation and configuration
+   cd ~/colcon_ws/src
+   git clone https://github.com/TheBIGduke/ESP32-SocketIO-ROS2-Bridge.git
+   cd ESP32-SocketIO-ROS2-Bridge/delivery_bridge
+   pip install -r requirements.txt
    ```
 
-2. **Clone this ESP32 project**
+2. **Build and test the delivery bridge**
    ```bash
-   git clone https://github.com/your-username/ESP32-SocketIO-ROS2-Bridge.git
-   cd ESP32-SocketIO-ROS2-Bridge
+   cd ~/colcon_ws/
+   colcon build --packages-select delivery_bridge --symlink-install --allow-overriding delivery_bridge
+   source install/setup.bash
+   ros2 run delivery_bridge server_node
    ```
 
 3. **Configure WiFi and server settings** in `DeliveryBridge_ESP32/src/main.cpp`
 
 4. **Upload to ESP32** using PlatformIO
 
-5. **Start the delivery bridge server** (follow delivery_bridge repository instructions)
+5. **Test ESP32 connection** - Server should be ready for ESP32 Socket.IO communication
 
 ## Installation
 
@@ -92,33 +95,63 @@ pip install platformio
 pio --version
 ```
 
-### Step 2: Setup ROS2 Delivery Bridge
+### Step 2: Setup Modified ROS2 Delivery Bridge
 
-**Important:** This project depends on the delivery bridge ROS2 package created by the original author. You must set this up first.
+**Important:** This project includes a modified version of the delivery bridge ROS2 package optimized for ESP32 communication (web interface removed, direct API access enabled).
 
-1. **Clone the delivery bridge repository:**
+**Prerequisites:** ROS2 Humble or newer installed on your system. Follow [ROS2 installation guide](https://docs.ros.org/en/humble/Installation.html) if needed.
+
+1. **Clone this repository (includes modified delivery_bridge):**
    ```bash
-   git clone https://github.com/cmauricioae8/delivery_bridge.git
-   cd delivery_bridge
+   cd ~/colcon_ws/src
+   git clone https://github.com/TheBIGduke/ESP32-SocketIO-ROS2-Bridge.git
+   cd ESP32-SocketIO-ROS2-Bridge
    ```
 
-2. **Follow the delivery bridge setup instructions:**
-   - Refer to the delivery_bridge repository README for complete ROS2 installation
-   - Install all required ROS2 dependencies
-   - Configure the Socket.IO server settings
-   - Test the delivery bridge functionality
+2. **Install Python dependencies:**
+   ```bash
+   cd delivery_bridge
+   pip install -r requirements.txt
+   ```
 
-3. **Verify delivery bridge is working:**
-   - Start the ROS2 delivery bridge server
-   - Confirm it's listening on the expected port (default: 9009)
-   - Note your computer's IP address for ESP32 configuration
+3. **Build the ROS2 package:**
+   ```bash
+   cd ~/colcon_ws/
+   colcon build --packages-select delivery_bridge --symlink-install --allow-overriding delivery_bridge
+   source install/setup.bash
+   ```
+
+4. **Test the modified delivery bridge:**
+   ```bash
+   ros2 run delivery_bridge server_node
+   ```
+   
+   Expected output:
+   ```
+   [INFO] [server_node]: Starting node BaseNode ...
+   [INFO] [server_node]: Database created successfully.
+   [INFO] [server_node]: FunctionManager thread started
+   INFO: Uvicorn running on http://0.0.0.0:9009
+   INFO: connection open
+   ```
+
+5. **Verify the server (ESP32-optimized):**
+   - Server listening on port 9009: ✅
+   - API documentation: `http://127.0.0.1:9009/docs` ✅
+   - Socket.IO ready for ESP32 connections ✅
+   - No web interface (removed for optimization) ✅
+
+**Key Modifications Made:**
+- Removed web interface components (templates, static files, user authentication)
+- Preserved all Socket.IO and API functionality for ESP32
+- No authentication required for direct ESP32 access
+- CORS enabled for cross-origin requests
 
 ### Step 3: Setup ESP32 Project
 
-1. **Clone or download this project:**
+1. **Navigate to ESP32 project (already cloned in Step 2):**
    ```bash
-   git clone https://github.com/your-username/ESP32-SocketIO-ROS2-Bridge.git
-   cd ESP32-SocketIO-ROS2-Bridge
+   cd ~/colcon_ws/src/ESP32-SocketIO-ROS2-Bridge/DeliveryBridge_ESP32
    ```
 
 2. **Open in VS Code:**
@@ -186,21 +219,36 @@ String payload = "[\"cmd_vel\",{\"linear_x\":" + String(direction * 0.2) + ",\"a
 
 ## Usage
 
-### 1. Start the ROS2 Delivery Bridge
+### 1. Start the Modified ROS2 Delivery Bridge
 
-First, ensure your delivery bridge is running:
+First, ensure your modified delivery bridge is running:
 
 ```bash
-# Navigate to delivery bridge directory
-cd delivery_bridge
+# Navigate to your ROS2 workspace
+cd /path/to/your/colcon_ws
 
-# Start the ROS2 delivery bridge server
-# (Follow specific instructions from delivery_bridge README)
-# This typically involves:
-# - Starting ROS2 nodes
-# - Running the Socket.IO server
-# - Confirming it's listening on port 9009
+# Source ROS2 environment
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
+# Start the delivery bridge server
+ros2 run delivery_bridge server_node
 ```
+
+Expected output:
+```
+[INFO] [server_node]: Starting node BaseNode ...
+[INFO] [server_node]: Database created successfully.
+[INFO] [server_node]: FunctionManager thread started
+INFO: Uvicorn running on http://0.0.0.0:9009
+INFO: connection open
+```
+
+**Key differences from original:**
+- No web interface startup (removed)
+- No user authentication required
+- Direct Socket.IO and API access for ESP32
+- Optimized for embedded device communication
 
 ### 2. Upload Code to ESP32
 
@@ -286,6 +334,35 @@ socketIO.sendEVENT(payload);
 
 // Poll for messages
 socketIO.loop();
+```
+
+### Modified Delivery Bridge API
+
+The delivery bridge now provides these ESP32-optimized endpoints:
+
+#### HTTP REST API (No authentication required)
+```cpp
+// Robot control
+POST /ros/functionality_mode/     // Set robot mode
+{"mode": "delivery"}
+
+// Navigation
+GET  /waypoints/waypoint         // Get available waypoints
+POST /navigation/set_goal/{id}   // Navigate to waypoint
+POST /navigation/set_wp/pause    // Pause navigation
+POST /navigation/set_wp/resume   // Resume navigation
+POST /navigation/set_wp/stop     // Stop navigation
+```
+
+#### Socket.IO Events
+```cpp
+// Outgoing (ESP32 → Server)
+["cmd_vel", {"linear_x": 0.2, "angular_z": 0.1}]  // Robot movement
+
+// Incoming (Server → ESP32)
+["battery", {"voltage": 12.5, "percentage": 85.2}]     // Battery status
+["robot_pose", {"position_x": 1.2, "position_y": 3.4, "orientation": 0.5}]  // Position
+["on_status_change", {"general": {"ready": true}}]     // System status
 ```
 
 ### Socket.IO Events
@@ -392,13 +469,22 @@ pio device list
 - Press ESP32 reset button
 - Verify correct COM port selection
 
-#### ROS2 Delivery Bridge Issues
+#### Modified Delivery Bridge Issues
 **Symptoms:** ESP32 connects but robot doesn't move
-- Verify delivery bridge ROS2 setup is complete
-- Check ROS2 nodes are running properly
-- Confirm cmd_vel topic is being published
-- Test delivery bridge independently first
-- Check delivery bridge logs for received commands
+- Verify modified delivery bridge ROS2 setup is complete
+- Check ROS2 nodes are running properly: `ros2 topic list`
+- Confirm cmd_vel topic is being published: `ros2 topic echo /cmd_vel`
+- Test Socket.IO connection: Check server logs for "connection open"
+- Verify API endpoints: Visit `http://YOUR_IP:9009/docs`
+- Check delivery bridge logs for received Socket.IO events
+
+#### Web Interface Removed
+**Note:** The original web interface has been removed for ESP32 optimization
+- No login page or user authentication
+- No static files (CSS, JS, images)
+- Direct API access without authentication
+- Socket.IO server still fully functional
+- API documentation available at `/docs` endpoint
 
 ### Performance Optimization
 
@@ -421,13 +507,26 @@ We welcome contributions!
 
 ### Acknowledgments
 
-This project builds upon the excellent work of the [delivery_bridge](https://github.com/cmauricioae8/delivery_bridge) ROS2 package created by **C. Mauricio Arteaga-Escamilla** ([@cmauricioae8](https://github.com/cmauricioae8)). Please refer to that repository for the complete ROS2 backend implementation and setup instructions.
+This project builds upon the excellent work of the [delivery_bridge](https://github.com/cmauricioae8/delivery_bridge) ROS2 package created by **C. Mauricio Arteaga-Escamilla** ([@cmauricioae8](https://github.com/cmauricioae8)). 
+
+**Modifications for ESP32 Optimization:**
+- Removed web interface components (templates, static files, user authentication)
+- Preserved all Socket.IO and API functionality
+- Enabled direct ESP32 access without authentication
+- Optimized for embedded device communication
+- Maintained full ROS2 integration and robot control capabilities
 
 **Original Author Credits:**
 - **Author:** C. Mauricio Arteaga-Escamilla
 - **GitHub:** [@cmauricioae8](https://github.com/cmauricioae8)
 - **Repository:** [delivery_bridge](https://github.com/cmauricioae8/delivery_bridge)
 - **Location:** Mexico
+- **Email:** cmauricioae8@gmail.com
+
+**ESP32 Bridge Implementation:**
+- **Author:** Kaléin Tamaríz - TheBIGduke
+- **Modifications:** Web interface removal, ESP32 optimization
+- **Version:** 2.0.0
 
 ---
 
