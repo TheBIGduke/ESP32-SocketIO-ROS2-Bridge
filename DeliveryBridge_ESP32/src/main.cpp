@@ -12,7 +12,7 @@
  * - State machine for movement demo
  *
  * @author Kaléin Tamaríz - TheBIGduke
- * @version 2.1.0
+ * @version 3.0.0
  *
  */
 #include <Arduino.h>            // Arduino core functions for PlatformIO
@@ -30,25 +30,38 @@ const char* password = "12345678";
 const char* socketio_host = "192.168.0.103";
 const int socketio_port = 9009;
 
+// Joystick pins
+#define VRX_PIN  39 // ESP32 pin GPIO39 (ADC3) connected to VRX pin
+#define VRY_PIN  36 // ESP32 pin GPIO36 (ADC0) connected to VRY pin
+
+// Joystick calibration values
+#define CENTER_X 1945
+#define CENTER_Y 2005
+#define MAX_X    4095
+#define MAX_Y    4095
+
 // Movement parameters
-const float LINEAR_SPEED = 0.3;   // Linear velocity (m/s)
-const float ANGULAR_SPEED = 0.5;  // Angular velocity (rad/s)
-const unsigned long STATE_DURATION = 3000; // Duration for each state (ms)
+const float LINEAR_SPEED_FULL = 0.4;   // Full linear velocity (m/s)
+const float LINEAR_SPEED_HALF = 0.2;   // Half linear velocity (m/s)
+const float ANGULAR_SPEED_FULL = 0.6;  // Full angular velocity (rad/s)
+const float ANGULAR_SPEED_HALF = 0.3;  // Half angular velocity (rad/s)
+
+// Speed thresholds (based on joystick range)
+const int SPEED_THRESHOLD = 250;  // Threshold for half vs full speed
 
 // Robot states
 enum RobotState {
   FORWARD,
   ROTATE_RIGHT,
   ROTATE_LEFT,
-  BACKWARD,
-  STOP
+  BACKWARD
 };
 
 SocketIOclient socketIO;
 
-// State machine variables
-RobotState currentState = FORWARD;
-unsigned long stateStartTime = 0;
+// Joystick and control variables
+int valueX = 0; // to store the X-axis value
+int valueY = 0; // to store the Y-axis value
 unsigned long lastCmdVel = 0;
 const unsigned long CMD_VEL_INTERVAL = 100; // Interval to send cmd_vel commands
 
@@ -79,15 +92,13 @@ void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length)
   }
 }
 
-String getStateName(RobotState state) {
-  switch(state) {
-    case FORWARD: return "FORWARD";
-    case ROTATE_RIGHT: return "ROTATE_RIGHT";
-    case ROTATE_LEFT: return "ROTATE_LEFT";
-    case BACKWARD: return "BACKWARD";
-    case STOP: return "STOP";
-    default: return "UNKNOWN";
-  }
+String getMovementDescription(float linear_x, float angular_z) {
+  if (linear_x > 0 && angular_z == 0) return "FORWARD";
+  else if (linear_x < 0 && angular_z == 0) return "BACKWARD";
+  else if (linear_x == 0 && angular_z > 0) return "ROTATE_LEFT";
+  else if (linear_x == 0 && angular_z < 0) return "ROTATE_RIGHT";
+  else if (linear_x == 0 && angular_z == 0) return "STOPPED";
+  else return "COMBINED_MOVEMENT";
 }
 
 void sendCmdVel(float linear_x, float angular_z) {
@@ -97,71 +108,75 @@ void sendCmdVel(float linear_x, float angular_z) {
   // Send cmd_vel event to delivery_bridge
   socketIO.sendEVENT(payload);
   
-  Serial.println("State: " + getStateName(currentState) + " | linear_x=" + String(linear_x) + ", angular_z=" + String(angular_z));
+  Serial.println("Movement: " + getMovementDescription(linear_x, angular_z) + " | linear_x=" + String(linear_x) + ", angular_z=" + String(angular_z));
 }
 
-void updateStateMachine() {
-  unsigned long currentTime = millis();
+void readJoystick() {
+  // Read X and Y analog values
+  valueX = analogRead(VRY_PIN);
+  valueY = analogRead(VRX_PIN);
+
+  // Map so center is 0, left/up is -100 and right/down is +100
+  valueX = (valueX - CENTER_X) * 1000 / MAX_X;
+  valueY = (valueY - CENTER_Y) * 1000 / MAX_Y;
+
+  // Apply custom deadzone
+  const int deadzone = 4; // Adjust as needed
+  if (abs(valueX) < deadzone) valueX = 0;
+  if (abs(valueY) < deadzone) valueY = 0;
+
+  // Debug output
+  Serial.print("Joystick - x = ");
+  Serial.print(valueX);
+  Serial.print(", y = ");
+  Serial.println(valueY);
+}
+
+float calculateLinearSpeed(int joystickValue) {
+  int absValue = abs(joystickValue);
   
-  // Check if it's time to transition to the next state
-  if (currentTime - stateStartTime >= STATE_DURATION) {
-    stateStartTime = currentTime;
-    
-    // Chain of events: FORWARD -> ROTATE_RIGHT -> ROTATE_LEFT -> BACKWARD -> STOP -> repeat
-    switch(currentState) {
-      case FORWARD:
-        currentState = ROTATE_RIGHT;
-        Serial.println("=== Transitioning to ROTATE_RIGHT ===");
-        break;
-      case ROTATE_RIGHT:
-        currentState = ROTATE_LEFT;
-        Serial.println("=== Transitioning to ROTATE_LEFT ===");
-        break;
-      case ROTATE_LEFT:
-        currentState = BACKWARD;
-        Serial.println("=== Transitioning to BACKWARD ===");
-        break;
-      case BACKWARD:
-        currentState = STOP;
-        Serial.println("=== Transitioning to STOP ===");
-        break;
-      case STOP:
-        currentState = FORWARD;
-        Serial.println("=== Restarting cycle - FORWARD ===");
-        break;
-    }
+  if (absValue == 0) {
+    return 0.0;
+  }
+  else if (absValue <= SPEED_THRESHOLD) {
+    // Half speed for middle range
+    return (joystickValue > 0) ? LINEAR_SPEED_HALF : -LINEAR_SPEED_HALF;
+  }
+  else {
+    // Full speed for extreme positions
+    return (joystickValue > 0) ? LINEAR_SPEED_FULL : -LINEAR_SPEED_FULL;
   }
 }
 
-void executeCurrentState() {
+float calculateAngularSpeed(int joystickValue) {
+  int absValue = abs(joystickValue);
+  
+  if (absValue == 0) {
+    return 0.0;
+  }
+  else if (absValue <= SPEED_THRESHOLD) {
+    // Half speed for middle range
+    return (joystickValue > 0) ? ANGULAR_SPEED_HALF : -ANGULAR_SPEED_HALF;
+  }
+  else {
+    // Full speed for extreme positions
+    return (joystickValue > 0) ? ANGULAR_SPEED_FULL : -ANGULAR_SPEED_FULL;
+  }
+}
+
+void processJoystickInput() {
   float linear_x = 0.0;
   float angular_z = 0.0;
   
-  switch(currentState) {
-    case FORWARD:
-      linear_x = LINEAR_SPEED;
-      angular_z = 0.0;
-      break;
-      
-    case ROTATE_RIGHT:
-      linear_x = 0.0;
-      angular_z = -ANGULAR_SPEED; // Negative for right rotation
-      break;
-      
-    case ROTATE_LEFT:
-      linear_x = 0.0;
-      angular_z = ANGULAR_SPEED;  // Positive for left rotation
-      break;
-      
-    case BACKWARD:
-      linear_x = -LINEAR_SPEED;   // Negative for backward
-      angular_z = 0.0;
-      break;
-      
-    case STOP:
-      linear_x = 0.0;
-      angular_z = 0.0;
-      break;
+  // Calculate speeds based on joystick positions
+  // Forward/Backward control (Y-axis)
+  if (valueY != 0) {
+    linear_x = calculateLinearSpeed(valueY);
+  }
+  
+  // Left/Right rotation control (X-axis)
+  if (valueX != 0) {
+    angular_z = -calculateAngularSpeed(valueX); // Negative for correct rotation direction
   }
   
   sendCmdVel(linear_x, angular_z);
@@ -170,6 +185,9 @@ void executeCurrentState() {
 void setup() {
   Serial.begin(9600);
   Serial.setDebugOutput(true);
+
+  // Set the ADC attenuation to 11 dB (up to ~3.3V input)
+  analogSetAttenuation(ADC_11db);
  
   // Connect to WiFi network
   WiFi.begin(ssid, password);
@@ -188,25 +206,26 @@ void setup() {
   socketIO.begin(socketio_host, socketio_port, "/socket.io/?EIO=4");
   socketIO.onEvent(socketIOEvent);
   
-  // Initialize state machine
-  stateStartTime = millis();
-  Serial.println("=== Robot Movement Demo Started ===");
-  Serial.println("Chain of events: FORWARD -> ROTATE_RIGHT -> ROTATE_LEFT -> BACKWARD -> STOP -> Repeat");
-  Serial.println("Each state duration: " + String(STATE_DURATION/1000) + " seconds");
-  Serial.println("=== Starting with FORWARD ===");
+  Serial.println("=== ESP32 Joystick Control Started ===");
+  Serial.println("Joystick Controls with Variable Speed:");
+  Serial.println("- Y-axis: Forward/Backward movement");
+  Serial.println("- X-axis: Left/Right rotation");
+  Serial.println("- Speed: Half speed for |value| <= " + String(SPEED_THRESHOLD) + ", Full speed for |value| > " + String(SPEED_THRESHOLD));
+  Serial.println("- Linear speeds: Half=" + String(LINEAR_SPEED_HALF) + "m/s, Full=" + String(LINEAR_SPEED_FULL) + "m/s");
+  Serial.println("- Angular speeds: Half=" + String(ANGULAR_SPEED_HALF) + "rad/s, Full=" + String(ANGULAR_SPEED_FULL) + "rad/s");
 }
 
 void loop() {
   socketIO.loop();
   
-  // Update state machine
-  updateStateMachine();
+  // Read joystick input
+  readJoystick();
   
   // Send cmd_vel commands at regular intervals
   if (millis() - lastCmdVel >= CMD_VEL_INTERVAL) {
     lastCmdVel = millis();
-    executeCurrentState();
+    processJoystickInput();
   }
  
-  delay(10); // Prevent watchdog triggers
+  delay(200); // Delay to match your joystick reading rate
 }
