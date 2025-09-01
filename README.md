@@ -1,30 +1,32 @@
-# ESP32 Socket.IO Client for ROS2 Bridge
+# ESP32 Joystick Controller for ROS2 Bridge
 
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-Compatible-orange.svg)](https://platformio.org/)
 [![ESP32](https://img.shields.io/badge/ESP32-Compatible-blue.svg)](https://www.espressif.com/en/products/socs/esp32)
 [![ROS2](https://img.shields.io/badge/ROS2-Humble%2B-blue.svg)](https://docs.ros.org/en/humble/)
 [![Socket.IO](https://img.shields.io/badge/Socket.IO-4.0%2B-green.svg)](https://socket.io/)
 
-A Socket.IO client implementation for ESP32 using PlatformIO that enables real-time communication between your ESP32 device and a modified ROS2 delivery bridge system for robot control via cmd_vel commands. The delivery bridge has been optimized for ESP32 communication by removing web interface components while preserving all Socket.IO and API functionality.
+A wireless joystick controller implementation for ESP32 using PlatformIO that enables real-time robot control through Socket.IO communication with a modified ROS2 delivery bridge system. Control your robot wirelessly with an analog joystick connected to ESP32, featuring variable speed control and seamless ROS2 integration.
 
 ## Features
 
-- Real-time Socket.IO communication between ESP32 and ROS2 delivery bridge
-- PlatformIO project structure for easy development
-- Event-driven callbacks for connection status monitoring
-- cmd_vel command transmission for robot control
-- Automatic reconnection logic
-- JSON-based message protocol
-- Easy configuration and deployment
-- **Modified delivery bridge** - Web interface removed, optimized for ESP32 access
-- **No authentication required** - Direct API access for ESP32
-- **Real-time robot data** - Battery status, position updates, system status
+- **Wireless Joystick Control** - Real-time robot control with analog joystick
+- **Variable Speed Control** - Two-speed operation (half/full speed) based on joystick position
+- **Real-time Socket.IO Communication** - Low-latency communication between ESP32 and ROS2
+- **PlatformIO Integration** - Professional development environment with easy deployment
+- **Plug-and-Play Hardware** - Simple joystick wiring to ESP32 GPIO pins
+- **Event-driven Architecture** - Responsive callbacks for connection status monitoring
+- **cmd_vel Command Transmission** - Direct robot movement control via ROS2 standard
+- **Automatic Reconnection Logic** - Robust connection handling
+- **JSON-based Protocol** - Standardized message format
+- **Modified Delivery Bridge** - Web interface removed, optimized for ESP32 access
+- **No Authentication Required** - Direct API access for embedded devices
+- **Real-time Robot Data** - Battery status, position updates, system status
 
 ## Table of Contents
 
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
-- [Installation](#installation)
+- [Installation](#installation)r
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Project Structure](#project-structure)
@@ -35,9 +37,20 @@ A Socket.IO client implementation for ESP32 using PlatformIO that enables real-t
 
 ### Hardware
 - **ESP32 Development Board** (ESP32 DevKitC, NodeMCU-32S, or compatible)
+- **Analog Joystick Module** (2-axis with VRX/VRY outputs)
+- **Jumper Wires** (male-to-female for connections)
 - **USB Cable** (micro-USB or USB-C depending on your board)
 - **Computer** with available USB port
 - **Robot** compatible with ROS2 cmd_vel commands (optional for testing)
+
+#### Joystick Wiring
+```
+Joystick Module → ESP32
+VCC → 3.3V
+GND → GND
+VRX → GPIO39 (ADC3)
+VRY → GPIO36 (ADC0)
+```
 
 ### Software
 - **Visual Studio Code** (recommended) or any text editor
@@ -64,11 +77,13 @@ A Socket.IO client implementation for ESP32 using PlatformIO that enables real-t
    ros2 run delivery_bridge server_node
    ```
 
-3. **Configure WiFi and server settings** in `DeliveryBridge_ESP32/src/main.cpp`
+3. **Wire the joystick** to ESP32 according to the wiring diagram
 
-4. **Upload to ESP32** using PlatformIO
+4. **Configure WiFi and server settings** in `DeliveryBridge_ESP32/src/main.cpp`
 
-5. **Test ESP32 connection** - Server should be ready for ESP32 Socket.IO communication
+5. **Upload to ESP32** using PlatformIO
+
+6. **Test joystick control** - Move joystick to control robot wirelessly
 
 ## Installation
 
@@ -166,11 +181,42 @@ pio --version
 
 ## Configuration
 
-### WiFi Configuration
+### Joystick Configuration
 
-Edit `DeliveryBridge_ESP32/src/main.cpp` and update your network credentials:
+#### Hardware Wiring
+Connect your analog joystick module to ESP32:
+
+```
+Joystick Pin → ESP32 Pin
+VCC         → 3.3V
+GND         → GND  
+VRX         → GPIO39 (ADC3)
+VRY         → GPIO36 (ADC0)
+```
+
+#### Software Configuration
+Edit `DeliveryBridge_ESP32/src/main.cpp` to configure joystick and WiFi settings:
 
 ```cpp
+// Joystick pins
+#define VRX_PIN  39 // ESP32 pin GPIO39 (ADC3) connected to VRX pin
+#define VRY_PIN  36 // ESP32 pin GPIO36 (ADC0) connected to VRY pin
+
+// Joystick calibration values (adjust based on your joystick)
+#define CENTER_X 1945
+#define CENTER_Y 2005
+#define MAX_X    4095
+#define MAX_Y    4095
+
+// Movement parameters
+const float LINEAR_SPEED_FULL = 0.4;   // Full linear velocity (m/s)
+const float LINEAR_SPEED_HALF = 0.2;   // Half linear velocity (m/s)
+const float ANGULAR_SPEED_FULL = 0.6;  // Full angular velocity (rad/s)
+const float ANGULAR_SPEED_HALF = 0.3;  // Half angular velocity (rad/s)
+
+// Speed threshold for variable speed control
+const int SPEED_THRESHOLD = 250;  // Threshold for half vs full speed
+
 // WiFi credentials
 const char* ssid = "ESP32";
 const char* password = "12345678";
@@ -202,19 +248,35 @@ const char* password = "12345678";
 
 ### Advanced Configuration
 
-You can modify these settings in `DeliveryBridge_ESP32/src/main.cpp`:
+#### Joystick Calibration
+To calibrate your joystick for optimal performance:
+
+1. **Find center values**: Upload the code and observe joystick readings at rest
+2. **Find max values**: Move joystick to extremes and note maximum readings
+3. **Update calibration constants** in `main.cpp`:
 
 ```cpp
-// Serial Configuration (currently set to 9600)
-Serial.begin(9600);
+// Update these based on your joystick readings
+#define CENTER_X 1945  // X-axis center value
+#define CENTER_Y 2005  // Y-axis center value
+#define MAX_X    4095  // Maximum X reading
+#define MAX_Y    4095  // Maximum Y reading
+```
 
-// cmd_vel sending interval (currently 3 seconds for testing)
-if (millis() - lastCmdVel > 3000) {
-  // Send cmd_vel logic
-}
+#### Speed Tuning
+Adjust robot speeds and control sensitivity:
 
-// cmd_vel values for testing
-String payload = "[\"cmd_vel\",{\"linear_x\":" + String(direction * 0.2) + ",\"angular_z\":" + String(direction * 0.1) + "}]";
+```cpp
+// Control sensitivity
+const int deadzone = 4;           // Joystick deadzone
+const int SPEED_THRESHOLD = 250;  // Half/full speed threshold
+
+// Movement speeds
+const float LINEAR_SPEED_FULL = 0.4;   // Maximum forward/backward speed
+const float ANGULAR_SPEED_FULL = 0.6;  // Maximum rotation speed
+
+// Communication settings
+const unsigned long CMD_VEL_INTERVAL = 100; // Command sending interval (ms)
 ```
 
 ## Usage
@@ -288,8 +350,15 @@ Connecting to WiFi...
 Connected to WiFi
 IP address: 192.168.0.101
 [IOc] Connected to url: /socket.io/?EIO=4
-Sent cmd_vel: linear_x=0.20, angular_z=0.10
-Sent cmd_vel: linear_x=-0.20, angular_z=-0.10
+=== ESP32 Joystick Control Started ===
+Joystick Controls with Variable Speed:
+- Y-axis: Forward/Backward movement
+- X-axis: Left/Right rotation
+- Speed: Half speed for |value| <= 250, Full speed for |value| > 250
+Joystick - x = 0, y = 0
+Movement: STOPPED | linear_x=0.00, angular_z=0.00
+Joystick - x = 150, y = 300
+Movement: COMBINED_MOVEMENT | linear_x=0.20, angular_z=-0.30
 ```
 
 #### Delivery Bridge Console:
@@ -322,14 +391,31 @@ The main code uses the ArduinoWebsockets library (Socket.IO compatible) with the
 // Socket.IO client instance
 SocketIOclient socketIO;
 
+// Read joystick values
+void readJoystick() {
+  valueX = analogRead(VRY_PIN);
+  valueY = analogRead(VRX_PIN);
+  // Apply mapping and deadzone filtering
+}
+
+// Calculate variable speeds based on joystick position
+float calculateLinearSpeed(int joystickValue) {
+  int absValue = abs(joystickValue);
+  if (absValue <= SPEED_THRESHOLD) {
+    return (joystickValue > 0) ? LINEAR_SPEED_HALF : -LINEAR_SPEED_HALF;
+  } else {
+    return (joystickValue > 0) ? LINEAR_SPEED_FULL : -LINEAR_SPEED_FULL;
+  }
+}
+
 // Connection
 socketIO.begin(socketio_host, socketio_port, "/socket.io/?EIO=4");
 
 // Event handler
 socketIO.onEvent(socketIOEvent);
 
-// Send cmd_vel event
-String payload = "[\"cmd_vel\",{\"linear_x\":0.2,\"angular_z\":0.1}]";
+// Send cmd_vel event based on joystick input
+String payload = "[\"cmd_vel\",{\"linear_x\":" + String(linear_x) + ",\"angular_z\":" + String(angular_z) + "}]";
 socketIO.sendEVENT(payload);
 
 // Poll for messages
@@ -390,8 +476,13 @@ The ESP32 sends cmd_vel commands in this JSON format:
 ```
 
 Where:
-- `linear_x`: Forward/backward velocity (m/s)
-- `angular_z`: Rotational velocity (rad/s)
+- `linear_x`: Forward/backward velocity (m/s) - controlled by joystick Y-axis
+- `angular_z`: Rotational velocity (rad/s) - controlled by joystick X-axis
+
+#### Variable Speed Control
+- **Half Speed**: When `|joystick_value| ≤ SPEED_THRESHOLD` (gentle movements)
+- **Full Speed**: When `|joystick_value| > SPEED_THRESHOLD` (extreme positions)
+- **Stopped**: When joystick is in center position (within deadzone)
 
 ## PlatformIO Commands
 
@@ -432,6 +523,14 @@ pio lib search "socket.io"
 
 ### Common Issues
 
+#### Joystick Not Responding
+**Symptoms:** Robot doesn't move when joystick is moved
+- **Check wiring**: Verify VRX→GPIO39, VRY→GPIO36, VCC→3.3V, GND→GND
+- **Check power**: Ensure joystick module receives 3.3V power
+- **Calibrate joystick**: Update CENTER_X, CENTER_Y values in code
+- **Check serial output**: Monitor joystick readings for proper values
+- **Verify deadzone**: Adjust deadzone value if joystick is too sensitive
+
 #### ESP32 Won't Connect to WiFi
 **Symptoms:** ESP32 continuously attempts WiFi connection
 - Verify WiFi credentials in `DeliveryBridge_ESP32/src/main.cpp`
@@ -469,6 +568,14 @@ pio device list
 - Press ESP32 reset button
 - Verify correct COM port selection
 
+#### Joystick Control Issues
+**Symptoms:** Joystick moves but robot responds incorrectly
+- **Speed too fast/slow**: Adjust LINEAR_SPEED_FULL/HALF and ANGULAR_SPEED_FULL/HALF
+- **Wrong direction**: Check joystick wiring (swap VRX/VRY if needed)
+- **Erratic movement**: Increase deadzone value or recalibrate center values
+- **No variable speed**: Verify SPEED_THRESHOLD value is appropriate
+- **Joystick drift**: Recalibrate CENTER_X and CENTER_Y values
+
 #### Modified Delivery Bridge Issues
 **Symptoms:** ESP32 connects but robot doesn't move
 - Verify modified delivery bridge ROS2 setup is complete
@@ -488,11 +595,13 @@ pio device list
 
 ### Performance Optimization
 
-For better performance:
-- Increase WiFi TX power: `WiFi.setTxPower(WIFI_POWER_19_5dBm)`
-- Adjust cmd_vel sending frequency (currently 3 seconds for testing)
-- Optimize message content size
-- Use appropriate cmd_vel values for your robot
+For better joystick control performance:
+- **Reduce latency**: Decrease CMD_VEL_INTERVAL (currently 100ms)
+- **Improve WiFi**: Increase TX power with `WiFi.setTxPower(WIFI_POWER_19_5dBm)`
+- **Fine-tune speeds**: Adjust speed constants for your robot's capabilities
+- **Optimize deadzone**: Set appropriate deadzone to prevent drift
+- **Calibrate precisely**: Use actual joystick readings for CENTER and MAX values
+- **Reduce serial output**: Comment out debug prints for faster operation
 
 ## Contributing
 
@@ -523,10 +632,10 @@ This project builds upon the excellent work of the [delivery_bridge](https://git
 - **Location:** Mexico
 - **Email:** cmauricioae8@gmail.com
 
-**ESP32 Bridge Implementation:**
+**ESP32 Joystick Controller Implementation:**
 - **Author:** Kaléin Tamaríz - TheBIGduke
-- **Modifications:** Web interface removal, ESP32 optimization
-- **Version:** 2.0.0
+- **Modifications:** Web interface removal, ESP32 optimization, joystick control integration
+- **Version:** 3.0.0
 
 ---
 
